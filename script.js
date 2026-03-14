@@ -1,7 +1,4 @@
- // ---------------------
-    // Data: List of brands
-    // (This sample list is partial; paste your full list as needed.)
-    const brands = [
+const brands = [
       { name: '3M', colors: ['#FF0000'] },
       { name: "500px", colors: ["#0099E5"] },
       { name: "About.me", colors: ["#00405D", "#FFCC33"] },
@@ -1054,234 +1051,285 @@
       { name: "Zopim", colors: ["#FF9D3B"] }
     ];
 
-    // ---------------------
-    // Global variables for pagination
-    let currentPage = 1;
-    const pageSize = 30;
-    let filteredBrands = brands;
 
-    // ---------------------
-    // Utility: Convert a hex color (e.g. "#FF0000") to its RGB string.
-    function hexToRgb(hex) {
-      hex = hex.replace(/^#/, '');
-      if (hex.length === 3) {
-        hex = hex.split('').map(char => char + char).join('');
-      }
-      const bigint = parseInt(hex, 16);
-      const r = (bigint >> 16) & 255;
-      const g = (bigint >> 8) & 255;
-      const b = bigint & 255;
-      return `rgb(${r}, ${g}, ${b})`;
-    }
+const state = {
+  currentPage: 1,
+  pageSize: 24,
+  filteredBrands: [...brands],
+};
 
-    // ---------------------
-    // Render the brand cards for a given list.
-    function renderBrands(list) {
-      const container = document.getElementById('brand-container');
-      container.innerHTML = '';
-      list.forEach(brand => {
-        const card = document.createElement('div');
-        card.className = 'bg-white dark:bg-gray-700 shadow rounded p-4';
+const brandContainer = document.getElementById('brand-container');
+const pagination = document.getElementById('pagination');
+const searchInput = document.getElementById('searchInput');
+const sortSelect = document.getElementById('sortSelect');
+const filterSelect = document.getElementById('filterSelect');
+const resultsSummary = document.getElementById('resultsSummary');
+const emptyState = document.getElementById('emptyState');
+const statBrands = document.getElementById('statBrands');
+const statSwatches = document.getElementById('statSwatches');
+const modal = document.getElementById('modal');
+const modalContent = document.getElementById('modal-content');
+const modalClose = document.getElementById('modal-close');
+const toast = document.getElementById('toast');
 
-        const title = document.createElement('h2');
-        title.textContent = brand.name;
-        title.className = 'font-bold mb-2 text-lg';
-        card.appendChild(title);
+document.documentElement.classList.add('dark');
 
-        const colorsContainer = document.createElement('div');
-        colorsContainer.className = 'flex flex-wrap gap-2';
+function normalizeHex(hex) {
+  if (!hex) return '';
+  let value = String(hex).trim();
+  if (!value.startsWith('#')) value = '#' + value;
+  if (value.length === 4) {
+    value = '#' + value.slice(1).split('').map(ch => ch + ch).join('');
+  }
+  return value.toUpperCase();
+}
 
-        brand.colors.forEach(color => {
-          const swatch = document.createElement('div');
-          swatch.className = 'w-12 h-12 rounded cursor-pointer border border-gray-200 dark:border-gray-600';
-          swatch.style.backgroundColor = color;
-          swatch.title = color;
-          swatch.addEventListener('click', () => openModal(color));
-          colorsContainer.appendChild(swatch);
-        });
-        card.appendChild(colorsContainer);
-        container.appendChild(card);
-      });
-    }
+function hexToRgb(hex) {
+  const value = normalizeHex(hex).replace('#', '');
+  const bigint = parseInt(value, 16);
+  if (Number.isNaN(bigint)) return 'rgb(0, 0, 0)';
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgb(${r}, ${g}, ${b})`;
+}
 
-    // Render only the brands for the current page.
-    function renderBrandsPage() {
-      const startIndex = (currentPage - 1) * pageSize;
-      const endIndex = startIndex + pageSize;
-      const pageBrands = filteredBrands.slice(startIndex, endIndex);
-      renderBrands(pageBrands);
-    }
+function getTextColor(hex) {
+  const value = normalizeHex(hex).replace('#', '');
+  const bigint = parseInt(value, 16);
+  if (Number.isNaN(bigint)) return '#ffffff';
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+  return luminance > 0.6 ? '#0f172a' : '#ffffff';
+}
 
-    // ---------------------
-    // Pagination Controls
-    function updatePagination() {
-      const paginationContainer = document.getElementById('pagination');
-      paginationContainer.innerHTML = '';
-      const totalPages = Math.ceil(filteredBrands.length / pageSize);
-      if (totalPages <= 1) return;
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.remove('hidden');
+  clearTimeout(showToast._timer);
+  showToast._timer = setTimeout(() => toast.classList.add('hidden'), 1400);
+}
 
-      // Previous button
-      const prevButton = document.createElement('button');
-      prevButton.textContent = 'Previous';
-      prevButton.className = 'px-3 py-1 m-1 border rounded ' + 
-        (currentPage === 1 ? 'bg-gray-300 cursor-not-allowed' : 'bg-white hover:bg-gray-200');
-      prevButton.disabled = currentPage === 1;
-      prevButton.addEventListener('click', () => {
-        if (currentPage > 1) {
-          currentPage--;
-          renderBrandsPage();
-          updatePagination();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      });
-      paginationContainer.appendChild(prevButton);
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    showToast(`Copied ${text}`);
+  } catch {
+    showToast('Copy not supported');
+  }
+}
 
-      // Page numbers
-      if (totalPages <= 10) {
-        for (let i = 1; i <= totalPages; i++) {
-          const btn = document.createElement('button');
-          btn.textContent = i;
-          btn.className = 'px-3 py-1 m-1 border rounded ' + 
-            (i === currentPage ? 'bg-blue-500 text-white' : 'bg-white hover:bg-gray-200');
-          btn.addEventListener('click', () => {
-            currentPage = i;
-            renderBrandsPage();
-            updatePagination();
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-          });
-          paginationContainer.appendChild(btn);
-        }
-      } else {
-        // For many pages, show first, last, current ± 2, and ellipses.
-        let pages = [];
-        pages.push(1);
-        if (currentPage > 4) pages.push('...');
-        for (let i = Math.max(2, currentPage - 2); i <= Math.min(totalPages - 1, currentPage + 2); i++) {
-          pages.push(i);
-        }
-        if (currentPage < totalPages - 3) pages.push('...');
-        if (totalPages > 1) pages.push(totalPages);
+function updateStats() {
+  statBrands.textContent = brands.length.toLocaleString();
+  statSwatches.textContent = brands.reduce((sum, brand) => sum + brand.colors.length, 0).toLocaleString();
+}
 
-        pages.forEach(p => {
-          const btn = document.createElement('button');
-          btn.textContent = p;
-          if (p === '...') {
-            btn.disabled = true;
-            btn.className = 'px-3 py-1 m-1 border rounded bg-gray-300';
-          } else {
-            btn.className = 'px-3 py-1 m-1 border rounded ' + 
-              (p === currentPage ? 'bg-blue-500 text-white' : 'bg-white hover:bg-gray-200');
-            btn.addEventListener('click', () => {
-              currentPage = p;
-              renderBrandsPage();
-              updatePagination();
-              window.scrollTo({ top: 0, behavior: 'smooth' });
-            });
-          }
-          paginationContainer.appendChild(btn);
-        });
-      }
+function createSwatch(hex) {
+  const normalized = normalizeHex(hex);
+  const rgb = hexToRgb(normalized);
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'group overflow-hidden rounded-2xl border border-white/10 text-left transition hover:-translate-y-0.5 hover:border-white/20 hover:shadow-xl hover:shadow-black/20';
+  button.addEventListener('click', () => openModal(normalized));
 
-      // Next button
-      const nextButton = document.createElement('button');
-      nextButton.textContent = 'Next';
-      nextButton.className = 'px-3 py-1 m-1 border rounded ' + 
-        (currentPage === totalPages ? 'bg-gray-300 cursor-not-allowed' : 'bg-white hover:bg-gray-200');
-      nextButton.disabled = currentPage === totalPages;
-      nextButton.addEventListener('click', () => {
-        if (currentPage < totalPages) {
-          currentPage++;
-          renderBrandsPage();
-          updatePagination();
-          window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-      });
-      paginationContainer.appendChild(nextButton);
-    }
+  const preview = document.createElement('div');
+  preview.className = 'h-20 w-full';
+  preview.style.background = normalized;
+  button.appendChild(preview);
 
-    // ---------------------
-    // Modal functionality for swatches
-    const modal = document.getElementById('modal');
-    const modalContent = document.getElementById('modal-content');
-    const modalClose = document.getElementById('modal-close');
+  const meta = document.createElement('div');
+  meta.className = 'flex items-center justify-between gap-3 bg-slate-900/90 px-3 py-3';
 
-    modalClose.addEventListener('click', () => {
-      modal.classList.add('hidden');
+  const labelWrap = document.createElement('div');
+  labelWrap.className = 'min-w-0';
+  const hexLine = document.createElement('div');
+  hexLine.className = 'truncate text-sm font-semibold text-white';
+  hexLine.textContent = normalized;
+  const rgbLine = document.createElement('div');
+  rgbLine.className = 'truncate text-xs text-slate-400';
+  rgbLine.textContent = rgb;
+  labelWrap.append(hexLine, rgbLine);
+
+  const copyBtn = document.createElement('span');
+  copyBtn.className = 'shrink-0 rounded-full border border-white/10 px-3 py-1 text-xs text-slate-300 transition group-hover:bg-white/5';
+  copyBtn.textContent = 'View';
+
+  meta.append(labelWrap, copyBtn);
+  button.appendChild(meta);
+  return button;
+}
+
+function renderBrands(list) {
+  brandContainer.innerHTML = '';
+  emptyState.classList.toggle('hidden', list.length !== 0);
+
+  list.forEach((brand) => {
+    const card = document.createElement('article');
+    card.className = 'overflow-hidden rounded-3xl border border-[#dce9c7] bg-white shadow-xl shadow-[#93c43e]/10';
+
+    const top = document.createElement('div');
+    top.className = 'border-b border-[#e7efd8] px-5 py-4';
+    const title = document.createElement('h2');
+    title.className = 'text-xl font-semibold tracking-tight text-slate-950';
+    title.textContent = brand.name;
+    const meta = document.createElement('p');
+    meta.className = 'mt-1 text-sm text-slate-600';
+    meta.textContent = `${brand.colors.length} color${brand.colors.length === 1 ? '' : 's'}`;
+    top.append(title, meta);
+
+    const palettePreview = document.createElement('div');
+    palettePreview.className = 'flex h-3 w-full';
+    brand.colors.forEach((color) => {
+      const segment = document.createElement('div');
+      segment.className = 'h-full';
+      segment.style.width = `${100 / brand.colors.length}%`;
+      segment.style.background = normalizeHex(color);
+      palettePreview.appendChild(segment);
     });
 
-    function openModal(color) {
-      modalContent.innerHTML = `
-        <div class="mb-4 flex justify-center">
-          <div class="w-16 h-16 rounded" style="background-color: ${color};"></div>
-        </div>
-        <div class="mb-2">
-          <span class="font-semibold">Hex:</span> ${color}
-          <button class="ml-2 px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm copy-btn" data-copy="${color}">Copy</button>
-        </div>
+    const swatches = document.createElement('div');
+    swatches.className = 'grid grid-cols-1 gap-3 p-5 sm:grid-cols-2';
+    brand.colors.forEach((color) => swatches.appendChild(createSwatch(color)));
+
+    const actions = document.createElement('div');
+    actions.className = 'flex items-center justify-between gap-3 border-t border-[#e7efd8] px-5 py-4';
+    const helper = document.createElement('p');
+    helper.className = 'text-sm text-slate-600';
+    helper.textContent = 'Open a swatch to copy hex or RGB.';
+    const copyAll = document.createElement('button');
+    copyAll.type = 'button';
+    copyAll.className = 'rounded-full border border-[#dce9c7] bg-[#f7fbf2] px-4 py-2 text-sm font-medium text-slate-800 transition hover:border-[#93c43e] hover:bg-[#eef7df]';
+    copyAll.textContent = 'Copy all hex';
+    copyAll.addEventListener('click', () => copyText(brand.colors.map(normalizeHex).join(', ')));
+    actions.append(helper, copyAll);
+
+    card.append(top, palettePreview, swatches, actions);
+    brandContainer.appendChild(card);
+  });
+}
+
+function renderPagination() {
+  pagination.innerHTML = '';
+  const totalPages = Math.ceil(state.filteredBrands.length / state.pageSize);
+  if (totalPages <= 1) return;
+
+  const makeButton = (label, page, isActive = false, disabled = false) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = label;
+    btn.disabled = disabled;
+    btn.className = `rounded-full px-4 py-2 text-sm transition ${isActive ? 'bg-[#93c43e] text-slate-950' : 'border border-[#dce9c7] bg-white text-slate-800 hover:bg-[#eef7df]'} ${disabled ? 'cursor-not-allowed opacity-40' : ''}`;
+    if (!disabled && !isActive) {
+      btn.addEventListener('click', () => {
+        state.currentPage = page;
+        render();
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+    }
+    return btn;
+  };
+
+  pagination.appendChild(makeButton('Previous', state.currentPage - 1, false, state.currentPage === 1));
+  for (let i = 1; i <= totalPages; i += 1) {
+    if (i === 1 || i === totalPages || Math.abs(i - state.currentPage) <= 1) {
+      pagination.appendChild(makeButton(String(i), i, i === state.currentPage));
+    } else if (Math.abs(i - state.currentPage) === 2) {
+      const dots = document.createElement('span');
+      dots.className = 'px-1 text-slate-500';
+      dots.textContent = '…';
+      pagination.appendChild(dots);
+    }
+  }
+  pagination.appendChild(makeButton('Next', state.currentPage + 1, false, state.currentPage === totalPages));
+}
+
+function renderSummary(totalVisible, totalPages) {
+  const start = totalVisible === 0 ? 0 : (state.currentPage - 1) * state.pageSize + 1;
+  const end = Math.min(state.currentPage * state.pageSize, state.filteredBrands.length);
+  resultsSummary.textContent = totalVisible === 0
+    ? 'No brands match your current search.'
+    : `Showing ${start}–${end} of ${state.filteredBrands.length} brands${totalPages > 1 ? ` · Page ${state.currentPage} of ${totalPages}` : ''}`;
+}
+
+function applyFilters() {
+  const term = searchInput.value.trim().toLowerCase();
+  const sort = sortSelect.value;
+  const size = filterSelect.value;
+
+  state.filteredBrands = brands.filter((brand) => {
+    const nameMatch = brand.name.toLowerCase().includes(term);
+    const sizeMatch = size === 'all' || (size === 'single' ? brand.colors.length === 1 : brand.colors.length > 1);
+    return nameMatch && sizeMatch;
+  }).sort((a, b) => sort === 'asc' ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+
+  state.currentPage = 1;
+  render();
+}
+
+function openModal(color) {
+  const normalized = normalizeHex(color);
+  const rgb = hexToRgb(normalized);
+  const textColor = getTextColor(normalized);
+  modalContent.innerHTML = `
+    <div class="overflow-hidden rounded-3xl border border-[#dce9c7] bg-[#f7fbf2]">
+      <div class="flex h-40 items-end justify-between p-6" style="background:${normalized}; color:${textColor};">
         <div>
-          <span class="font-semibold">RGB:</span> ${hexToRgb(color)}
-          <button class="ml-2 px-2 py-1 bg-gray-200 dark:bg-gray-600 rounded text-sm copy-btn" data-copy="${hexToRgb(color)}">Copy</button>
+          <div class="text-sm font-medium opacity-80">Selected color</div>
+          <div class="mt-1 text-3xl font-bold tracking-tight">${normalized}</div>
         </div>
-      `;
-      modalContent.querySelectorAll('.copy-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const text = btn.getAttribute('data-copy');
-          navigator.clipboard.writeText(text).then(() => {
-            const originalText = btn.textContent;
-            btn.textContent = 'Copied!';
-            setTimeout(() => {
-              btn.textContent = originalText;
-            }, 1000);
-          });
-        });
-      });
-      modal.classList.remove('hidden');
-    }
+      </div>
+      <div class="space-y-4 bg-white p-6">
+        <div class="rounded-2xl border border-[#dce9c7] bg-[#f7fbf2] p-4">
+          <div class="text-sm text-slate-600">Hex</div>
+          <div class="mt-1 flex items-center justify-between gap-3">
+            <code class="text-base font-semibold text-slate-950">${normalized}</code>
+            <button data-copy="${normalized}" class="copy-btn rounded-full border border-[#dce9c7] bg-white px-4 py-2 text-sm text-slate-800 transition hover:bg-[#eef7df]">Copy</button>
+          </div>
+        </div>
+        <div class="rounded-2xl border border-[#dce9c7] bg-[#f7fbf2] p-4">
+          <div class="text-sm text-slate-600">RGB</div>
+          <div class="mt-1 flex items-center justify-between gap-3">
+            <code class="text-base font-semibold text-slate-950">${rgb}</code>
+            <button data-copy="${rgb}" class="copy-btn rounded-full border border-[#dce9c7] bg-white px-4 py-2 text-sm text-slate-800 transition hover:bg-[#eef7df]">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  modalContent.querySelectorAll('.copy-btn').forEach((btn) => {
+    btn.addEventListener('click', () => copyText(btn.getAttribute('data-copy')));
+  });
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
 
-    // ---------------------
-    // Search, Sort & Filter
-    const searchInput = document.getElementById('searchInput');
-    const sortSelect = document.getElementById('sortSelect');
-    const filterSelect = document.getElementById('filterSelect');
+function closeModal() {
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+}
 
-    function applyFilters() {
-      filteredBrands = brands.filter(brand => {
-        const searchText = searchInput.value.toLowerCase();
-        return brand.name.toLowerCase().includes(searchText);
-      });
+function render() {
+  const totalPages = Math.max(1, Math.ceil(state.filteredBrands.length / state.pageSize));
+  if (state.currentPage > totalPages) state.currentPage = totalPages;
+  const start = (state.currentPage - 1) * state.pageSize;
+  const pageItems = state.filteredBrands.slice(start, start + state.pageSize);
+  renderBrands(pageItems);
+  renderPagination();
+  renderSummary(pageItems.length, totalPages);
+}
 
-      const filterValue = filterSelect.value;
-      if (filterValue === 'single') {
-        filteredBrands = filteredBrands.filter(brand => brand.colors.length === 1);
-      } else if (filterValue === 'multiple') {
-        filteredBrands = filteredBrands.filter(brand => brand.colors.length > 1);
-      }
+searchInput.addEventListener('input', applyFilters);
+sortSelect.addEventListener('change', applyFilters);
+filterSelect.addEventListener('change', applyFilters);
+modalClose.addEventListener('click', closeModal);
+modal.addEventListener('click', (event) => {
+  if (event.target === modal) closeModal();
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeModal();
+});
 
-      const sortValue = sortSelect.value;
-      filteredBrands.sort((a, b) => {
-        if (a.name < b.name) return sortValue === 'asc' ? -1 : 1;
-        if (a.name > b.name) return sortValue === 'asc' ? 1 : -1;
-        return 0;
-      });
-
-      currentPage = 1;
-      updatePagination();
-      renderBrandsPage();
-    }
-
-    searchInput.addEventListener('input', applyFilters);
-    sortSelect.addEventListener('change', applyFilters);
-    filterSelect.addEventListener('change', applyFilters);
-
-    // ---------------------
-    // Dark mode toggle
-    const toggleDark = document.getElementById('toggle-dark');
-    toggleDark.addEventListener('click', () => {
-      document.documentElement.classList.toggle('dark');
-    });
-
-    // ---------------------
-    // Initial render
-    filteredBrands = brands;
-    renderBrandsPage();
-    updatePagination();
+updateStats();
+applyFilters();
